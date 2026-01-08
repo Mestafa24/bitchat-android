@@ -27,6 +27,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bitchat.android.model.BitchatMessage
 import com.bitchat.android.ui.media.FullScreenImageViewer
+import androidx.compose.ui.platform.LocalContext
 
 /**
  * Main ChatScreen - REFACTORED to use component-based architecture
@@ -57,6 +58,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
     val showMentionSuggestions by viewModel.showMentionSuggestions.collectAsStateWithLifecycle()
     val mentionSuggestions by viewModel.mentionSuggestions.collectAsStateWithLifecycle()
     val showAppInfo by viewModel.showAppInfo.collectAsStateWithLifecycle()
+    val ctx = LocalContext.current
 
     var messageText by remember { mutableStateOf(TextFieldValue("")) }
     var showPasswordPrompt by remember { mutableStateOf(false) }
@@ -201,6 +203,14 @@ fun ChatScreen(viewModel: ChatViewModel) {
                 viewModel.sendMessage(messageText.text.trim())
                 messageText = TextFieldValue("")
                 forceScrollToBottom = !forceScrollToBottom // Toggle to trigger scroll
+            }
+        },
+        onSendSos = {
+            val text = messageText.text.trim()
+            if (text.isNotEmpty()) {
+                viewModel.sendSosMessage(text, ctx)
+                messageText = TextFieldValue("")
+                forceScrollToBottom = !forceScrollToBottom
             }
         },
         onSendVoiceNote = { peer, onionOrChannel, path ->
@@ -382,6 +392,7 @@ private fun ChatInputSection(
     messageText: TextFieldValue,
     onMessageTextChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
+    onSendSos: () -> Unit,
     onSendVoiceNote: (String?, String?, String) -> Unit,
     onSendImageNote: (String?, String?, String) -> Unit,
     onSendFileNote: (String?, String?, String) -> Unit,
@@ -425,6 +436,7 @@ private fun ChatInputSection(
                 value = messageText,
                 onValueChange = onMessageTextChange,
                 onSend = onSend,
+                onSendSos = onSendSos,
                 onSendVoiceNote = onSendVoiceNote,
                 onSendImageNote = onSendImageNote,
                 onSendFileNote = onSendFileNote,

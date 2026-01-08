@@ -164,6 +164,7 @@ fun MessageInput(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
+    onSendSos: () -> Unit,
     onSendVoiceNote: (String?, String?, String) -> Unit,
     onSendImageNote: (String?, String?, String) -> Unit,
     onSendFileNote: (String?, String?, String) -> Unit,
@@ -176,6 +177,7 @@ fun MessageInput(
     val colorScheme = MaterialTheme.colorScheme
     val isFocused = remember { mutableStateOf(false) }
     val hasText = value.text.isNotBlank() // Check if there's text for send button state
+    var sosMode by remember { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
     var isRecording by remember { mutableStateOf(false) }
@@ -315,9 +317,36 @@ fun MessageInput(
             )
             
         } else {
+            // SOS toggle button (appears only when there's text)
+            if (hasText) {
+                Spacer(Modifier.width(6.dp))
+                IconButton(
+                    onClick = { sosMode = !sosMode },
+                    enabled = hasText,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .background(
+                                color = if (sosMode) Color(0xFFFF3B30).copy(alpha = 0.95f) else Color(0xFFFF3B30).copy(alpha = 0.5f),
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Warning,
+                            contentDescription = "Toggle SOS mode",
+                            modifier = Modifier.size(18.dp),
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
+
             // Send button with enabled/disabled state
             IconButton(
-                onClick = { if (hasText) onSend() }, // Only execute if there's text
+                onClick = { if (hasText) { if (sosMode) onSendSos() else onSend() } }, // Only execute if there's text
                 enabled = hasText, // Enable only when there's text
                 modifier = Modifier.size(32.dp)
             ) {

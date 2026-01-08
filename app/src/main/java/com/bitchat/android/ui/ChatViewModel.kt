@@ -1,4 +1,5 @@
 package com.bitchat.android.ui
+import android.content.Context
 
 import android.app.Application
 import android.util.Log
@@ -14,10 +15,10 @@ import com.bitchat.android.protocol.BitchatPacket
 
 
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.util.Date
 import com.bitchat.android.util.NotificationIntervalManager
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import java.util.Date
 import kotlin.random.Random
 
 /**
@@ -427,59 +428,79 @@ class ChatViewModel(
     
     fun sendMessage(content: String) {
         if (content.isEmpty()) return
-        
+
         // Check for commands
         if (content.startsWith("/")) {
             val selectedLocationForCommand = state.selectedLocationChannel.value
-            commandProcessor.processCommand(content, meshService, meshService.myPeerID, { messageContent, mentions, channel ->
-                if (selectedLocationForCommand is com.bitchat.android.geohash.ChannelID.Location) {
-                    // Route command-generated public messages via Nostr in geohash channels
-                    geohashViewModel.sendGeohashMessage(
-                        messageContent,
-                        selectedLocationForCommand.channel,
-                        meshService.myPeerID,
-                        state.getNicknameValue()
-                    )
-                } else {
-                    // Default: route via mesh
-                    meshService.sendMessage(messageContent, mentions, channel)
-                }
-            })
+            commandProcessor.processCommand(
+                content,
+                meshService,
+                meshService.myPeerID,
+                { messageContent, mentions, channel ->
+                    if (selectedLocationForCommand is com.bitchat.android.geohash.ChannelID.Location) {
+                        // Route command-generated public messages via Nostr in geohash channels
+                        geohashViewModel.sendGeohashMessage(
+                            messageContent,
+                            selectedLocationForCommand.channel,
+                            meshService.myPeerID,
+                            state.getNicknameValue()
+                        )
+                    } else {
+                        // Default: route via mesh
+                        meshService.sendMessage(messageContent, mentions, channel)
+                    }
+                })
             return
         }
-        
-        val mentions = messageManager.parseMentions(content, meshService.getPeerNicknames().values.toSet(), state.getNicknameValue())
+
+        val mentions = messageManager.parseMentions(
+            content,
+            meshService.getPeerNicknames().values.toSet(),
+            state.getNicknameValue()
+        )
         // REMOVED: Auto-join mentioned channels feature that was incorrectly parsing hashtags from @mentions
         // This was causing messages like "test @jack#1234 test" to auto-join channel "#1234"
-        
+
         var selectedPeer = state.getSelectedPrivateChatPeerValue()
         val currentChannelValue = state.getCurrentChannelValue()
-        
+
         if (selectedPeer != null) {
             // If the selected peer is a temporary Nostr alias or a noise-hex identity, resolve to a canonical target
-            selectedPeer = com.bitchat.android.services.ConversationAliasResolver.resolveCanonicalPeerID(
-                selectedPeerID = selectedPeer,
-                connectedPeers = state.getConnectedPeersValue(),
-                meshNoiseKeyForPeer = { pid -> meshService.getPeerInfo(pid)?.noisePublicKey },
-                meshHasPeer = { pid -> meshService.getPeerInfo(pid)?.isConnected == true },
-                nostrPubHexForAlias = { alias -> com.bitchat.android.nostr.GeohashAliasRegistry.get(alias) },
-                findNoiseKeyForNostr = { key -> com.bitchat.android.favorites.FavoritesPersistenceService.shared.findNoiseKey(key) }
-            ).also { canonical ->
-                if (canonical != state.getSelectedPrivateChatPeerValue()) {
-                    privateChatManager.startPrivateChat(canonical, meshService)
+            selectedPeer =
+                com.bitchat.android.services.ConversationAliasResolver.resolveCanonicalPeerID(
+                    selectedPeerID = selectedPeer,
+                    connectedPeers = state.getConnectedPeersValue(),
+                    meshNoiseKeyForPeer = { pid -> meshService.getPeerInfo(pid)?.noisePublicKey },
+                    meshHasPeer = { pid -> meshService.getPeerInfo(pid)?.isConnected == true },
+                    nostrPubHexForAlias = { alias ->
+                        com.bitchat.android.nostr.GeohashAliasRegistry.get(
+                            alias
+                        )
+                    },
+                    findNoiseKeyForNostr = { key ->
+                        com.bitchat.android.favorites.FavoritesPersistenceService.shared.findNoiseKey(
+                            key
+                        )
+                    }
+                ).also { canonical ->
+                    if (canonical != state.getSelectedPrivateChatPeerValue()) {
+                        privateChatManager.startPrivateChat(canonical, meshService)
+                    }
                 }
-            }
             // Send private message
             val recipientNickname = meshService.getPeerNicknames()[selectedPeer]
             privateChatManager.sendPrivateMessage(
-                content, 
-                selectedPeer, 
+                content,
+                selectedPeer,
                 recipientNickname,
                 state.getNicknameValue(),
                 meshService.myPeerID
             ) { messageContent, peerID, recipientNicknameParam, messageId ->
                 // Route via MessageRouter (mesh when connected+established, else Nostr)
-                val router = com.bitchat.android.services.MessageRouter.getInstance(getApplication(), meshService)
+                val router = com.bitchat.android.services.MessageRouter.getInstance(
+                    getApplication(),
+                    meshService
+                )
                 router.sendPrivate(messageContent, peerID, recipientNicknameParam, messageId)
             }
         } else {
@@ -487,7 +508,12 @@ class ChatViewModel(
             val selectedLocationChannel = state.selectedLocationChannel.value
             if (selectedLocationChannel is com.bitchat.android.geohash.ChannelID.Location) {
                 // Send to geohash channel via Nostr ephemeral event
-                geohashViewModel.sendGeohashMessage(content, selectedLocationChannel.channel, meshService.myPeerID, state.getNicknameValue())
+                geohashViewModel.sendGeohashMessage(
+                    content,
+                    selectedLocationChannel.channel,
+                    meshService.myPeerID,
+                    state.getNicknameValue()
+                )
             } else {
                 // Send public/channel message via mesh
                 val message = BitchatMessage(
@@ -501,7 +527,11 @@ class ChatViewModel(
                 )
 
                 if (currentChannelValue != null) {
-                    channelManager.addChannelMessage(currentChannelValue, message, meshService.myPeerID)
+                    channelManager.addChannelMessage(
+                        currentChannelValue,
+                        message,
+                        meshService.myPeerID
+                    )
 
                     // Check if encrypted channel
                     if (channelManager.hasChannelKey(currentChannelValue)) {
@@ -526,6 +556,37 @@ class ChatViewModel(
                     messageManager.addMessage(message)
                     meshService.sendMessage(content, mentions, null)
                 }
+            }
+        }
+    }
+
+    /**
+     * Send SOS as a public broadcast.
+     * Adds a local UI echo immediately, then uses the mesh service with SOS TTL.
+     */
+    fun sendSosMessage(content: String, ctx: Context) {
+        if (content.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val json = JSONObject()
+                    .put("type","SOS")
+                    .put("ver",1)
+                    .put("body", content)
+                    .put("time", System.currentTimeMillis())
+                    .put("client","android")
+                    .toString()
+
+                val message = BitchatMessage(
+                    sender = state.getNicknameValue() ?: meshService.myPeerID,
+                    content = json,
+                    timestamp = Date(),
+                    isRelay = false,
+                    senderPeerID = meshService.myPeerID
+                )
+                messageManager.addMessage(message)
+                meshService.sendSosMessage(content, ctx)
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "sendSosMessage failed: ${e.message}")
             }
         }
     }

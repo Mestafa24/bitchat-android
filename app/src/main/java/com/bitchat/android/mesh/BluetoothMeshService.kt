@@ -14,6 +14,9 @@ import com.bitchat.android.model.RequestSyncPacket
 import com.bitchat.android.sync.GossipSyncManager
 import com.bitchat.android.util.toHexString
 import kotlinx.coroutines.*
+import com.bitchat.android.location.LocationHelper
+import com.bitchat.android.location.GeoPoint
+import org.json.JSONObject
 import java.util.*
 import kotlin.math.sign
 import kotlin.random.Random
@@ -666,13 +669,13 @@ class BluetoothMeshService(private val context: Context) {
         }
         return reusable
     }
-    
+
     /**
      * Send public message
      */
     fun sendMessage(content: String, mentions: List<String> = emptyList(), channel: String? = null) {
         if (content.isEmpty()) return
-        
+
         serviceScope.launch {
             val packet = BitchatPacket(
                 version = 1u,
@@ -690,6 +693,53 @@ class BluetoothMeshService(private val context: Context) {
             connectionManager.broadcastPacket(RoutedPacket(signedPacket))
             // Track our own broadcast message for sync
             try { gossipSyncManager.onPublicPacketSeen(signedPacket) } catch (_: Exception) { }
+        }
+    } // <-- needed to close sendMessage before the next function
+
+    /**
+     * Send SOS public message (special TTL + recognizable JSON payload)
+     */
+    fun sendSosMessage(content: String, ctx: Context) {
+        if (content.isEmpty()) return
+
+        serviceScope.launch {
+            try {
+                // Best-effort location
+                val gp: GeoPoint? = LocationHelper.getBestLocation(ctx, timeoutMs = 1500)
+
+                // Minimal machine-readable envelope for gateways
+                val sosObj = JSONObject()
+                    .put("type", "SOS")
+                    .put("ver", 1)
+                    .put("body", content)
+                    .put("time", System.currentTimeMillis())
+                    .put("client", "android")
+                if (gp != null) {
+                    // You can round to ~5 decimals (~1.1m) or 4 (~11m) for privacy:
+                    val lat = String.format("%.5f", gp.lat).toDouble()
+                    val lon = String.format("%.5f", gp.lon).toDouble()
+                    sosObj.put("lat", lat)
+                    sosObj.put("lon", lon)
+                    gp.accuracy?.let { sosObj.put("acc", it) }
+                }
+                val sosJson = sosObj.toString()
+
+                val packet = BitchatPacket(
+                    version = 1u,
+                    type = MessageType.MESSAGE.value,
+                    senderID = hexStringToByteArray(myPeerID),
+                    recipientID = SpecialRecipients.BROADCAST,
+                    timestamp = System.currentTimeMillis().toULong(),
+                    payload = sosJson.toByteArray(Charsets.UTF_8),
+                    signature = null,
+                    ttl = com.bitchat.android.util.AppConstants.SOS_TTL_HOPS
+                )
+                val signedPacket = signPacketBeforeBroadcast(packet)
+                connectionManager.broadcastPacket(RoutedPacket(signedPacket))
+                try { gossipSyncManager.onPublicPacketSeen(signedPacket) } catch (_: Exception) { }
+            } catch (e: Exception) {
+                Log.e(TAG, "sendSosMessage failed: ${e.message}", e)
+            }
         }
     }
 

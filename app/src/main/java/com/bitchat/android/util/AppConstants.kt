@@ -9,6 +9,8 @@ object AppConstants {
     // Packet time-to-live (hops)
     val MESSAGE_TTL_HOPS: UByte = 7u     // Default TTL for regular packets
     val SYNC_TTL_HOPS: UByte = 0u        // TTL for neighbor-only sync packets
+    val SOS_TTL_HOPS: UByte = 20u        // TTL for SOS emergency broadcasts (tune later)
+
 
     object Mesh {
         // Peer lifecycle

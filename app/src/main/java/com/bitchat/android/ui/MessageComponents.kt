@@ -41,6 +41,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import org.json.JSONObject
 import com.bitchat.android.ui.media.FileMessageItem
 import com.bitchat.android.model.BitchatMessageType
 import com.bitchat.android.R
@@ -149,12 +153,39 @@ fun MessageItem(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
-    
+
+    // Detect SOS payload (JSON with "type":"SOS")
+    val isSos = remember(message.content) {
+        try { JSONObject(message.content).optString("type") == "SOS" } catch (_: Exception) { false }
+    }
+    val isDark = isSystemInDarkTheme()
+    // Theme-aware, toned-down in dark mode for readability
+    val sosBg = if (isDark)
+        colorScheme.surfaceVariant.copy(alpha = 0.16f)   // subtle tint in dark
+    else
+        colorScheme.errorContainer                        // strong fill in light
+    val sosStroke = if (isDark)
+        colorScheme.error.copy(alpha = 0.70f)            // softer border in dark
+    else
+        colorScheme.error
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (isSos)
+                        Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(sosBg)
+                            .border(1.dp, sosStroke, RoundedCornerShape(10.dp))
+                            .padding(6.dp)
+                    else Modifier
+                )
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start,
@@ -174,6 +205,8 @@ fun MessageItem(
                     onMessageLongPress = onMessageLongPress,
                     onCancelTransfer = onCancelTransfer,
                     onImageClick = onImageClick,
+                    isSos = isSos,                // <-- pass down for text color choice
+                    isDark = isDark,              // <-- pass down for text color choice
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = endPad)
@@ -211,6 +244,8 @@ fun MessageItem(
         onMessageLongPress: ((BitchatMessage) -> Unit)?,
         onCancelTransfer: ((BitchatMessage) -> Unit)?,
         onImageClick: ((String, List<String>, Int) -> Unit)?,
+        isSos: Boolean = false,
+        isDark: Boolean = false,
         modifier: Modifier = Modifier
     ) {
     // Image special rendering
@@ -385,6 +420,11 @@ fun MessageItem(
         val haptic = LocalHapticFeedback.current
         val context = LocalContext.current
         var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+        // Pick a readable base text color based on our SOS background strategy
+        val baseTextColor =
+            if (isSos) {
+                if (isDark) colorScheme.onSurface else colorScheme.onErrorContainer
+            } else colorScheme.onSurface
         Text(
             text = annotatedText,
             modifier = modifier.pointerInput(message) {
@@ -460,7 +500,7 @@ fun MessageItem(
             softWrap = true,
             overflow = TextOverflow.Visible,
             style = androidx.compose.ui.text.TextStyle(
-                color = colorScheme.onSurface
+                color = baseTextColor
             ),
             onTextLayout = { result -> textLayoutResult = result }
         )

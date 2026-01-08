@@ -14,6 +14,7 @@ import com.bitchat.android.model.BitchatMessage
 import com.bitchat.android.mesh.BluetoothMeshService
 import androidx.compose.material3.ColorScheme
 import com.bitchat.android.ui.theme.BASE_FONT_SIZE
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -53,11 +54,22 @@ fun formatMessageAsAnnotatedString(
     val isSelf = message.senderPeerID == meshService.myPeerID || 
                  message.sender == currentUserNickname ||
                  message.sender.startsWith("$currentUserNickname#")
+
+        // Detect SOS envelope and extract human-visible body
+        val (isSos, visibleBody) = try {
+            val obj = JSONObject(message.content)
+            if (obj.optString("type") == "SOS") {
+                true to obj.optString("body", message.content)
+            } else {
+                false to message.content
+            }
+        } catch (_: Exception) { false to message.content }
     
     if (message.sender != "system") {
         // Get base color for this peer (iOS-style color assignment)
-        val baseColor = if (isSelf) {
-            Color(0xFFFF9500) // Orange for self (iOS orange)
+        val forcedBase = if (isSos) Color(0xFFFF3B30) else null // Red for SOS
+        val baseColor = forcedBase ?: if (isSelf) {
+            Color(0xFFFF9500) // Orange for self
         } else {
             getPeerColor(message, isDark)
         }
@@ -117,7 +129,7 @@ fun formatMessageAsAnnotatedString(
         builder.pop()
         
         // Message content with iOS-style hashtag and mention highlighting
-        appendIOSFormattedContent(builder, message.content, message.mentions, currentUserNickname, baseColor, isSelf, isDark)
+        appendIOSFormattedContent(builder, visibleBody, message.mentions, currentUserNickname, baseColor, isSelf, isDark)
         
         // iOS-style timestamp at the END (smaller, grey)
         // Timestamp (and optional PoW badge)
@@ -174,7 +186,10 @@ fun formatMessageHeaderAnnotatedString(
             message.sender.startsWith("$currentUserNickname#")
 
     if (message.sender != "system") {
-        val baseColor = if (isSelf) Color(0xFFFF9500) else getPeerColor(message, isDark)
+        // Make header red for SOS too
+        val isSosHeader = try { JSONObject(message.content).optString("type") == "SOS" } catch (_: Exception) { false }
+        val baseColor = if (isSosHeader) Color(0xFFFF3B30)
+        else if (isSelf) Color(0xFFFF9500) else getPeerColor(message, isDark)
         val (baseName, suffix) = splitSuffix(message.sender)
 
         // "<@"
