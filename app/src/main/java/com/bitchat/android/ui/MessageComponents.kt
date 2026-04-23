@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
- 
+
 
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -72,20 +72,20 @@ fun MessagesList(
     onImageClick: ((String, List<String>, Int) -> Unit)? = null
 ) {
     val listState = rememberLazyListState()
-    
+
     // Track if this is the first time messages are being loaded
     var hasScrolledToInitialPosition by remember { mutableStateOf(false) }
-    
+
     // Smart scroll: auto-scroll to bottom for initial load, then only when user is at or near the bottom
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             val layoutInfo = listState.layoutInfo
             val firstVisibleIndex = layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: -1
-            
+
             // With reverseLayout=true and reversed data, index 0 is the latest message at the bottom
             val isFirstLoad = !hasScrolledToInitialPosition
             val isNearLatest = firstVisibleIndex <= 2
-            
+
             if (isFirstLoad || isNearLatest) {
                 listState.animateScrollToItem(0)
                 if (isFirstLoad) {
@@ -94,7 +94,7 @@ fun MessagesList(
             }
         }
     }
-    
+
     // Track whether user has scrolled away from the latest messages
     val isAtLatest by remember {
         derivedStateOf {
@@ -105,7 +105,7 @@ fun MessagesList(
     LaunchedEffect(isAtLatest) {
         onScrolledUpChanged?.invoke(!isAtLatest)
     }
-    
+
     // Force scroll to bottom when requested (e.g., when user sends a message)
     LaunchedEffect(forceScrollToBottom) {
         if (messages.isNotEmpty()) {
@@ -113,7 +113,7 @@ fun MessagesList(
             listState.animateScrollToItem(0)
         }
     }
-    
+
     LazyColumn(
         state = listState,
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -125,16 +125,16 @@ fun MessagesList(
             items = messages.asReversed(),
             key = { it.id }
         ) { message ->
-                MessageItem(
-                    message = message,
-                    messages = messages,
-                    currentUserNickname = currentUserNickname,
-                    meshService = meshService,
-                    onNicknameClick = onNicknameClick,
-                    onMessageLongPress = onMessageLongPress,
-                    onCancelTransfer = onCancelTransfer,
-                    onImageClick = onImageClick
-                )
+            MessageItem(
+                message = message,
+                messages = messages,
+                currentUserNickname = currentUserNickname,
+                meshService = meshService,
+                onNicknameClick = onNicknameClick,
+                onMessageLongPress = onMessageLongPress,
+                onCancelTransfer = onCancelTransfer,
+                onImageClick = onImageClick
+            )
         }
     }
 }
@@ -159,15 +159,14 @@ fun MessageItem(
         try { JSONObject(message.content).optString("type") == "SOS" } catch (_: Exception) { false }
     }
     val isDark = isSystemInDarkTheme()
-    // Theme-aware, toned-down in dark mode for readability
+    // Use explicit SOS colors so rendering stays consistent across devices and themes.
+    // The previous implementation used a faint dark-theme style but a much punchier
+    // light-theme style, which made different phones look inconsistent.
     val sosBg = if (isDark)
-        colorScheme.surfaceVariant.copy(alpha = 0.16f)   // subtle tint in dark
+        Color(0xFFFF3B30).copy(alpha = 0.14f)
     else
-        colorScheme.errorContainer                        // strong fill in light
-    val sosStroke = if (isDark)
-        colorScheme.error.copy(alpha = 0.70f)            // softer border in dark
-    else
-        colorScheme.error
+        Color(0xFFFF3B30).copy(alpha = 0.10f)
+    val sosStroke = Color(0xFFFF3B30).copy(alpha = if (isDark) 0.78f else 0.68f)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -226,28 +225,28 @@ fun MessageItem(
                 }
             }
         }
-        
+
         // Link previews removed; links are now highlighted inline and clickable within the message text
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-    private fun MessageTextWithClickableNicknames(
-        message: BitchatMessage,
-        messages: List<BitchatMessage>,
-        currentUserNickname: String,
-        meshService: BluetoothMeshService,
-        colorScheme: ColorScheme,
-        timeFormatter: SimpleDateFormat,
-        onNicknameClick: ((String) -> Unit)?,
-        onMessageLongPress: ((BitchatMessage) -> Unit)?,
-        onCancelTransfer: ((BitchatMessage) -> Unit)?,
-        onImageClick: ((String, List<String>, Int) -> Unit)?,
-        isSos: Boolean = false,
-        isDark: Boolean = false,
-        modifier: Modifier = Modifier
-    ) {
+private fun MessageTextWithClickableNicknames(
+    message: BitchatMessage,
+    messages: List<BitchatMessage>,
+    currentUserNickname: String,
+    meshService: BluetoothMeshService,
+    colorScheme: ColorScheme,
+    timeFormatter: SimpleDateFormat,
+    onNicknameClick: ((String) -> Unit)?,
+    onMessageLongPress: ((BitchatMessage) -> Unit)?,
+    onCancelTransfer: ((BitchatMessage) -> Unit)?,
+    onImageClick: ((String, List<String>, Int) -> Unit)?,
+    isSos: Boolean = false,
+    isDark: Boolean = false,
+    modifier: Modifier = Modifier
+) {
     // Image special rendering
     if (message.type == BitchatMessageType.Image) {
         com.bitchat.android.ui.media.ImageMessageItem(
@@ -386,7 +385,7 @@ fun MessageItem(
 
     // Check if this message should be animated during PoW mining
     val shouldAnimate = shouldAnimateMessage(message.id)
-    
+
     // If animation is needed, use the matrix animation component for content only
     if (shouldAnimate) {
         // Display message with matrix animation for content
@@ -411,19 +410,19 @@ fun MessageItem(
             colorScheme = colorScheme,
             timeFormatter = timeFormatter
         )
-        
+
         // Check if this message was sent by self to avoid click interactions on own nickname
-        val isSelf = message.senderPeerID == meshService.myPeerID || 
-                     message.sender == currentUserNickname ||
-                     message.sender.startsWith("$currentUserNickname#")
-        
+        val isSelf = message.senderPeerID == meshService.myPeerID ||
+                message.sender == currentUserNickname ||
+                message.sender.startsWith("$currentUserNickname#")
+
         val haptic = LocalHapticFeedback.current
         val context = LocalContext.current
         var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
         // Pick a readable base text color based on our SOS background strategy
         val baseTextColor =
             if (isSos) {
-                if (isDark) colorScheme.onSurface else colorScheme.onErrorContainer
+                colorScheme.onSurface
             } else colorScheme.onSurface
         Text(
             text = annotatedText,
@@ -510,7 +509,7 @@ fun MessageItem(
 @Composable
 fun DeliveryStatusIcon(status: DeliveryStatus) {
     val colorScheme = MaterialTheme.colorScheme
-    
+
     when (status) {
         is DeliveryStatus.Sending -> {
             Text(

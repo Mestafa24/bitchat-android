@@ -102,13 +102,13 @@ class MentionVisualTransformation : VisualTransformation {
         val mentionRegex = Regex("@([a-zA-Z0-9_]+)")
         val annotatedString = buildAnnotatedString {
             var lastIndex = 0
-            
+
             mentionRegex.findAll(text.text).forEach { match ->
                 // Add text before the match
                 if (match.range.first > lastIndex) {
                     append(text.text.substring(lastIndex, match.range.first))
                 }
-                
+
                 // Add the styled mention
                 withStyle(
                     style = SpanStyle(
@@ -119,16 +119,16 @@ class MentionVisualTransformation : VisualTransformation {
                 ) {
                     append(match.value)
                 }
-                
+
                 lastIndex = match.range.last + 1
             }
-            
+
             // Add remaining text
             if (lastIndex < text.text.length) {
                 append(text.text.substring(lastIndex))
             }
         }
-        
+
         return TransformedText(
             text = annotatedString,
             offsetMapping = OffsetMapping.Identity
@@ -142,12 +142,12 @@ class MentionVisualTransformation : VisualTransformation {
 class CombinedVisualTransformation(private val transformations: List<VisualTransformation>) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         var resultText = text
-        
+
         // Apply each transformation in order
         transformations.forEach { transformation ->
             resultText = transformation.filter(resultText).text
         }
-        
+
         return TransformedText(
             text = resultText,
             offsetMapping = OffsetMapping.Identity
@@ -180,6 +180,13 @@ fun MessageInput(
     var sosMode by remember { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
+    val isBroadcastChat = selectedPrivatePeer == null && currentChannel == null
+
+    // SOS mode must only exist in the public broadcast chat.
+    // Reset it immediately if the user switches into a private chat or channel.
+    LaunchedEffect(isBroadcastChat) {
+        if (!isBroadcastChat) sosMode = false
+    }
     var isRecording by remember { mutableStateOf(false) }
     var elapsedMs by remember { mutableStateOf(0L) }
     var amplitude by remember { mutableStateOf(0) }
@@ -203,7 +210,7 @@ fun MessageInput(
                 ),
                 cursorBrush = SolidColor(if (isRecording) Color.Transparent else colorScheme.primary),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { 
+                keyboardActions = KeyboardActions(onSend = {
                     if (hasText) onSend() // Only send if there's text
                 }),
                 visualTransformation = CombinedVisualTransformation(
@@ -252,9 +259,9 @@ fun MessageInput(
                 }
             }
         }
-        
+
         Spacer(modifier = Modifier.width(8.dp)) // Reduced spacing
-        
+
         // Voice and image buttons when no text (only visible in Mesh chat)
         if (value.text.isEmpty() && showMediaButtons) {
             // Hold-to-record microphone
@@ -315,10 +322,10 @@ fun MessageInput(
                     )
                 }
             )
-            
+
         } else {
-            // SOS toggle button (appears only when there's text)
-            if (hasText) {
+            // SOS toggle button (broadcast chat only, never in private chats/channels)
+            if (hasText && isBroadcastChat) {
                 Spacer(Modifier.width(6.dp))
                 IconButton(
                     onClick = { sosMode = !sosMode },
@@ -346,7 +353,11 @@ fun MessageInput(
 
             // Send button with enabled/disabled state
             IconButton(
-                onClick = { if (hasText) { if (sosMode) onSendSos() else onSend() } }, // Only execute if there's text
+                onClick = {
+                    if (hasText) {
+                        if (isBroadcastChat && sosMode) onSendSos() else onSend()
+                    }
+                }, // Only execute if there's text
                 enabled = hasText, // Enable only when there's text
                 modifier = Modifier.size(32.dp)
             ) {
@@ -484,7 +495,7 @@ fun MentionSuggestionsBox(
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    
+
     Column(
         modifier = modifier
             .background(colorScheme.surface)
@@ -506,7 +517,7 @@ fun MentionSuggestionItem(
     onClick: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -524,9 +535,9 @@ fun MentionSuggestionItem(
             color = Color(0xFFFF9500), // Orange like mentions
             fontSize = (BASE_FONT_SIZE - 4).sp
         )
-        
+
         Spacer(modifier = Modifier.weight(1f))
-        
+
         Text(
             text = stringResource(R.string.mention),
             style = MaterialTheme.typography.bodySmall.copy(

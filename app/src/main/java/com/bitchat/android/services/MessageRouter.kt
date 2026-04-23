@@ -70,11 +70,13 @@ class MessageRouter private constructor(
             }
         }
 
-        val hasMesh = mesh.getPeerInfo(toPeerID)?.isConnected == true
+        // For the Raspberry Pi gateway, peerInfo may be missing/unverified even though
+        // a valid Noise session exists. A Noise session is enough to send a PM.
         val hasEstablished = mesh.hasEstablishedSession(toPeerID)
-        if (hasMesh && hasEstablished) {
-            Log.d(TAG, "Routing PM via mesh to ${toPeerID} msg_id=${messageID.take(8)}…")
-            mesh.sendPrivateMessage(content, toPeerID, recipientNickname, messageID)
+        val hasMesh = hasEstablished || (mesh.getPeerInfo(toPeerID)?.isConnected == true)
+        if (hasEstablished) {
+            Log.d(TAG, "Routing PM via mesh Noise session to ${toPeerID} msg_id=${messageID.take(8)}…")
+            mesh.sendPrivateMessage(content, toPeerID, recipientNickname.ifBlank { toPeerID }, messageID)
         } else if (canSendViaNostr(toPeerID)) {
             Log.d(TAG, "Routing PM via Nostr to ${toPeerID.take(32)}… msg_id=${messageID.take(8)}…")
             nostr.sendPrivateMessage(content, toPeerID, recipientNickname, messageID)
@@ -131,11 +133,13 @@ class MessageRouter private constructor(
         val iterator = queued.iterator()
         while (iterator.hasNext()) {
             val (content, nickname, messageID) = iterator.next()
-            var hasMesh = mesh.getPeerInfo(peerID)?.isConnected == true && mesh.hasEstablishedSession(peerID)
+            // A valid Noise session is sufficient for gateway-style peers, even if they
+            // are not present in the normal verified peer list.
+            var hasMesh = mesh.hasEstablishedSession(peerID)
             // If this is a noiseHex key, see if there is a connected mesh peer for this identity
             if (!hasMesh && peerID.length == 64 && peerID.matches(Regex("^[0-9a-fA-F]+$"))) {
                 val meshPeer = resolveMeshPeerForNoiseHex(peerID)
-                if (meshPeer != null && mesh.getPeerInfo(meshPeer)?.isConnected == true && mesh.hasEstablishedSession(meshPeer)) {
+                if (meshPeer != null && mesh.hasEstablishedSession(meshPeer)) {
                     mesh.sendPrivateMessage(content, meshPeer, nickname, messageID)
                     iterator.remove()
                     continue

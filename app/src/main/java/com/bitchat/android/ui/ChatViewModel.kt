@@ -566,25 +566,27 @@ class ChatViewModel(
      */
     fun sendSosMessage(content: String, ctx: Context) {
         if (content.isEmpty()) return
+
         viewModelScope.launch {
             try {
-                val json = JSONObject()
-                    .put("type","SOS")
-                    .put("ver",1)
-                    .put("body", content)
-                    .put("time", System.currentTimeMillis())
-                    .put("client","android")
-                    .toString()
+                val sosJson = meshService.buildSosEnvelope(content, ctx)
+                val sosTime = try {
+                    JSONObject(sosJson).optLong("time", System.currentTimeMillis())
+                } catch (_: Exception) {
+                    System.currentTimeMillis()
+                }
 
                 val message = BitchatMessage(
                     sender = state.getNicknameValue() ?: meshService.myPeerID,
-                    content = json,
-                    timestamp = Date(),
+                    content = sosJson,
+                    timestamp = Date(sosTime),
                     isRelay = false,
                     senderPeerID = meshService.myPeerID
                 )
+
                 messageManager.addMessage(message)
-                meshService.sendSosMessage(content, ctx)
+                meshService.sendSosEnvelope(sosJson)
+
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "sendSosMessage failed: ${e.message}")
             }
