@@ -8,6 +8,7 @@ import com.bitchat.android.model.RoutedPacket
 import com.bitchat.android.protocol.BitchatPacket
 import com.bitchat.android.protocol.MessageType
 import com.bitchat.android.util.toHexString
+import com.bitchat.android.ui.isCopilotMessage
 import kotlinx.coroutines.*
 import java.util.*
 import kotlin.random.Random
@@ -92,7 +93,10 @@ class MessageHandler(private val myPeerID: String, private val appContext: andro
                         // Gateway/copilot compatibility: the Pi may not appear in the
                         // normal verified peer list, but copilot PMs should still render
                         // as a named responder-side assistant instead of <@unknown>.
-                        val displayName = if (privateMessage.content.startsWith("Safety Copilot:", ignoreCase = true)) {
+                        val displayName = if (
+                            privateMessage.content.startsWith("Safety Copilot:", ignoreCase = true) ||
+                            isCopilotMessage(privateMessage.content)
+                        ) {
                             delegate?.addOrUpdatePeer(peerID, "Safety Copilot Gateway")
                             "Safety Copilot Gateway"
                         } else {

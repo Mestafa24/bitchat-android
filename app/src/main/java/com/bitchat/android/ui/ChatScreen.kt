@@ -115,7 +115,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
             .background(colorScheme.background) // Extend background to fill entire screen including status bar
     ) {
         val headerHeight = 42.dp
-        
+
         // Main content area that responds to keyboard/window insets
         Column(
             modifier = Modifier
@@ -141,10 +141,10 @@ fun ChatScreen(viewModel: ChatViewModel) {
                 onNicknameClick = { fullSenderName ->
                     // Single click - mention user in text input
                     val currentText = messageText.text
-                    
+
                     // Extract base nickname and hash suffix from full sender name
                     val (baseName, hashSuffix) = splitSuffix(fullSenderName)
-                    
+
                     // Check if we're in a geohash channel to include hash suffix
                     val selectedLocationChannel = viewModel.selectedLocationChannel.value
                     val mentionText = if (selectedLocationChannel is com.bitchat.android.geohash.ChannelID.Location && hashSuffix.isNotEmpty()) {
@@ -154,13 +154,13 @@ fun ChatScreen(viewModel: ChatViewModel) {
                         // Regular chat - just the base nickname
                         "@$baseName"
                     }
-                    
+
                     val newText = when {
                         currentText.isEmpty() -> "$mentionText "
                         currentText.endsWith(" ") -> "$currentText$mentionText "
                         else -> "$currentText $mentionText "
                     }
-                    
+
                     messageText = TextFieldValue(
                         text = newText,
                         selection = TextRange(newText.length)
@@ -181,53 +181,59 @@ fun ChatScreen(viewModel: ChatViewModel) {
                     viewerImagePaths = allImagePaths
                     initialViewerIndex = initialIndex
                     showFullScreenImageViewer = true
+                },
+                onCopilotQuickReply = { reply ->
+                    if (reply.isNotBlank()) {
+                        viewModel.sendMessage(reply)
+                        forceScrollToBottom = !forceScrollToBottom
+                    }
                 }
             )
             // Input area - stays at bottom
-        // Bridge file share from lower-level input to ViewModel
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        com.bitchat.android.ui.events.FileShareDispatcher.setHandler { peer, channel, path ->
-            viewModel.sendFileNote(peer, channel, path)
-        }
-    }
+            // Bridge file share from lower-level input to ViewModel
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                com.bitchat.android.ui.events.FileShareDispatcher.setHandler { peer, channel, path ->
+                    viewModel.sendFileNote(peer, channel, path)
+                }
+            }
 
-    ChatInputSection(
-        messageText = messageText,
-        onMessageTextChange = { newText: TextFieldValue ->
-            messageText = newText
-            viewModel.updateCommandSuggestions(newText.text)
-            viewModel.updateMentionSuggestions(newText.text)
-        },
-        onSend = {
-            if (messageText.text.trim().isNotEmpty()) {
-                viewModel.sendMessage(messageText.text.trim())
-                messageText = TextFieldValue("")
-                forceScrollToBottom = !forceScrollToBottom // Toggle to trigger scroll
-            }
-        },
-        onSendSos = {
-            val text = messageText.text.trim()
-            if (text.isNotEmpty()) {
-                viewModel.sendSosMessage(text, ctx)
-                messageText = TextFieldValue("")
-                forceScrollToBottom = !forceScrollToBottom
-            }
-        },
-        onSendVoiceNote = { peer, onionOrChannel, path ->
-            viewModel.sendVoiceNote(peer, onionOrChannel, path)
-        },
-        onSendImageNote = { peer, onionOrChannel, path ->
-            viewModel.sendImageNote(peer, onionOrChannel, path)
-        },
-        onSendFileNote = { peer, onionOrChannel, path ->
-            viewModel.sendFileNote(peer, onionOrChannel, path)
-        },
-        
-        showCommandSuggestions = showCommandSuggestions,
-        commandSuggestions = commandSuggestions,
-        showMentionSuggestions = showMentionSuggestions,
-        mentionSuggestions = mentionSuggestions,
-        onCommandSuggestionClick = { suggestion: CommandSuggestion ->
+            ChatInputSection(
+                messageText = messageText,
+                onMessageTextChange = { newText: TextFieldValue ->
+                    messageText = newText
+                    viewModel.updateCommandSuggestions(newText.text)
+                    viewModel.updateMentionSuggestions(newText.text)
+                },
+                onSend = {
+                    if (messageText.text.trim().isNotEmpty()) {
+                        viewModel.sendMessage(messageText.text.trim())
+                        messageText = TextFieldValue("")
+                        forceScrollToBottom = !forceScrollToBottom // Toggle to trigger scroll
+                    }
+                },
+                onSendSos = {
+                    val text = messageText.text.trim()
+                    if (text.isNotEmpty()) {
+                        viewModel.sendSosMessage(text, ctx)
+                        messageText = TextFieldValue("")
+                        forceScrollToBottom = !forceScrollToBottom
+                    }
+                },
+                onSendVoiceNote = { peer, onionOrChannel, path ->
+                    viewModel.sendVoiceNote(peer, onionOrChannel, path)
+                },
+                onSendImageNote = { peer, onionOrChannel, path ->
+                    viewModel.sendImageNote(peer, onionOrChannel, path)
+                },
+                onSendFileNote = { peer, onionOrChannel, path ->
+                    viewModel.sendFileNote(peer, onionOrChannel, path)
+                },
+
+                showCommandSuggestions = showCommandSuggestions,
+                commandSuggestions = commandSuggestions,
+                showMentionSuggestions = showMentionSuggestions,
+                mentionSuggestions = mentionSuggestions,
+                onCommandSuggestionClick = { suggestion: CommandSuggestion ->
                     val commandText = viewModel.selectCommandSuggestion(suggestion)
                     messageText = TextFieldValue(
                         text = commandText,
@@ -377,7 +383,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
         showLocationNotesSheet = showLocationNotesSheet,
         onLocationNotesSheetDismiss = { showLocationNotesSheet = false },
         showUserSheet = showUserSheet,
-        onUserSheetDismiss = { 
+        onUserSheetDismiss = {
             showUserSheet = false
             selectedMessageForSheet = null // Reset message when dismissing
         },
@@ -466,7 +472,7 @@ private fun ChatFloatingHeader(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val locationManager = remember { com.bitchat.android.geohash.LocationChannelManager.getInstance(context) }
-    
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -551,7 +557,7 @@ private fun ChatDialogs(
             meshService = viewModel.meshService
         )
     }
-    
+
     // Location channels sheet
     if (showLocationChannelsSheet) {
         LocationChannelsSheet(
@@ -560,7 +566,7 @@ private fun ChatDialogs(
             viewModel = viewModel
         )
     }
-    
+
     // Location notes sheet (extracted to separate presenter)
     if (showLocationNotesSheet) {
         LocationNotesSheetPresenter(
@@ -568,7 +574,7 @@ private fun ChatDialogs(
             onDismiss = onLocationNotesSheetDismiss
         )
     }
-    
+
     // User action sheet
     if (showUserSheet) {
         ChatUserSheet(

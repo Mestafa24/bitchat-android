@@ -4,6 +4,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -48,6 +50,7 @@ import org.json.JSONObject
 import com.bitchat.android.ui.media.FileMessageItem
 import com.bitchat.android.model.BitchatMessageType
 import com.bitchat.android.R
+import com.bitchat.android.ui.parseCopilotEnvelope
 import androidx.compose.ui.res.stringResource
 
 
@@ -69,7 +72,8 @@ fun MessagesList(
     onNicknameClick: ((String) -> Unit)? = null,
     onMessageLongPress: ((BitchatMessage) -> Unit)? = null,
     onCancelTransfer: ((BitchatMessage) -> Unit)? = null,
-    onImageClick: ((String, List<String>, Int) -> Unit)? = null
+    onImageClick: ((String, List<String>, Int) -> Unit)? = null,
+    onCopilotQuickReply: ((String) -> Unit)? = null
 ) {
     val listState = rememberLazyListState()
 
@@ -133,7 +137,8 @@ fun MessagesList(
                 onNicknameClick = onNicknameClick,
                 onMessageLongPress = onMessageLongPress,
                 onCancelTransfer = onCancelTransfer,
-                onImageClick = onImageClick
+                onImageClick = onImageClick,
+                onCopilotQuickReply = onCopilotQuickReply
             )
         }
     }
@@ -149,7 +154,8 @@ fun MessageItem(
     onNicknameClick: ((String) -> Unit)? = null,
     onMessageLongPress: ((BitchatMessage) -> Unit)? = null,
     onCancelTransfer: ((BitchatMessage) -> Unit)? = null,
-    onImageClick: ((String, List<String>, Int) -> Unit)? = null
+    onImageClick: ((String, List<String>, Int) -> Unit)? = null,
+    onCopilotQuickReply: ((String) -> Unit)? = null
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
@@ -206,6 +212,7 @@ fun MessageItem(
                     onImageClick = onImageClick,
                     isSos = isSos,                // <-- pass down for text color choice
                     isDark = isDark,              // <-- pass down for text color choice
+                    onCopilotQuickReply = onCopilotQuickReply,
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = endPad)
@@ -230,7 +237,7 @@ fun MessageItem(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun MessageTextWithClickableNicknames(
     message: BitchatMessage,
@@ -243,6 +250,7 @@ private fun MessageTextWithClickableNicknames(
     onMessageLongPress: ((BitchatMessage) -> Unit)?,
     onCancelTransfer: ((BitchatMessage) -> Unit)?,
     onImageClick: ((String, List<String>, Int) -> Unit)?,
+    onCopilotQuickReply: ((String) -> Unit)? = null,
     isSos: Boolean = false,
     isDark: Boolean = false,
     modifier: Modifier = Modifier
@@ -376,6 +384,76 @@ private fun MessageTextWithClickableNicknames(
                         }
                     } else {
                         Text(text = stringResource(R.string.file_unavailable), fontFamily = FontFamily.Monospace, color = Color.Gray)
+                    }
+                }
+            }
+        }
+
+        return
+    }
+
+    val copilotEnvelope = remember(message.content) { parseCopilotEnvelope(message.content) }
+    if (copilotEnvelope != null) {
+        val headerText = formatMessageHeaderAnnotatedString(
+            message = message,
+            currentUserNickname = currentUserNickname,
+            meshService = meshService,
+            colorScheme = colorScheme,
+            timeFormatter = timeFormatter
+        )
+        val incomingCopilot = message.isPrivate && message.sender != currentUserNickname
+        Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = headerText,
+                fontFamily = FontFamily.Monospace,
+                color = colorScheme.onSurface
+            )
+            Surface(
+                color = Color(0xFF0A84FF).copy(alpha = if (isSystemInDarkTheme()) 0.18f else 0.10f),
+                shape = RoundedCornerShape(12.dp),
+                tonalElevation = 0.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF0A84FF).copy(alpha = 0.35f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Safety Copilot",
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0A84FF),
+                        fontSize = 13.sp
+                    )
+                    copilotEnvelope.severity?.let { sev ->
+                        Text(
+                            text = "Priority: ${sev.uppercase()}",
+                            color = colorScheme.onSurface.copy(alpha = 0.75f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Text(
+                        text = copilotEnvelope.text,
+                        color = colorScheme.onSurface,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    if (incomingCopilot && copilotEnvelope.choices.isNotEmpty() && onCopilotQuickReply != null) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            copilotEnvelope.choices.forEach { choice ->
+                                AssistChip(
+                                    onClick = { onCopilotQuickReply.invoke(choice) },
+                                    label = { Text(choice) }
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Tap a quick reply or type your own update.",
+                            color = colorScheme.onSurface.copy(alpha = 0.65f),
+                            fontSize = 11.sp
+                        )
                     }
                 }
             }
